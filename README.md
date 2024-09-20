@@ -103,3 +103,10 @@ copy `dialog-lvgl` to Verdin AM62, set library path and excute the bianry.
 export LD_LIBRARY_PATH=/usr/lib/plugins/wayland-shell-integration
 ./dialog-lvgl
 ```
+
+
+## Contribution and Support
+
+If you find any issues with the development board feel free to open an Issue in this repository. For LVGL related issues (features, bugs, etc) please use the main [lvgl repository](https://github.com/lvgl/lvgl).
+
+If you found a bug and found a solution too please send a Pull request. If you are new to Pull requests refer to [Our Guide](https://docs.lvgl.io/master/CONTRIBUTING.html#pull-request) to learn the basics.
