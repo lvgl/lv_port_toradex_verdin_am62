@@ -1,0 +1,188 @@
+diff --git a/Makefile b/Makefile
+index 13ffadb..9b4558f 100644
+--- a/Makefile
++++ b/Makefile
+@@ -14,8 +14,9 @@ url?=https://git.ostc-eu.org/rzr/dialog-lvgl
+ cmake_options?=-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
+ 
+ exe?=${project}
+-sysroot?=${CURDIR}/tmp/sysroot
+-prefix?=/usr/local
++#sysroot?=${CURDIR}/tmp/sysroot
++sysroot=${SDKTARGETSYSROOT}
++prefix?=/usr
+ includedir?=${prefix}/include
+ base_bindir?=/bin
+ base_libdir?=/lib
+@@ -31,8 +32,12 @@ CFLAGS+=-I${sysroot}${includedir}/
+ CFLAGS+=-I${sysroot}${includedir}/lvgl
+ CFLAGS+=-I${sysroot}${includedir}/lvgl/lv_drivers
+ LDLIBS+=-L${sysroot}/${libdir}
++LDLIBS+=-L${sysroot}${libdir}/plugins/wayland-shell-integration
+ LDLIBS+=-llv_drivers
+ LDLIBS+=-llvgl
++LDLIBS+=-llvgl_demos
++LDLIBS+=-lxdg-shell
++LDLIBS+=-lwayland-cursor
+ V?=1
+ width?=42
+ height=${width}
+diff --git a/src/drivers/wayland.c b/src/drivers/wayland.c
+index 856ae0b..f14237f 100644
+--- a/src/drivers/wayland.c
++++ b/src/drivers/wayland.c
+@@ -20,6 +20,20 @@ static void * tick_thread(void * data)
+     }
+ }
+ 
++#define H_RES (1920)
++#define V_RES (1200)
++void hal_init(void)
++{
++    static pthread_t hal_thread;
++    lv_disp_t * disp;
++    lv_wayland_init();
++    disp = lv_wayland_create_window(H_RES, V_RES, "Window Title", NULL);
++    // lv_wayland_window_set_fullscreen(disp, true);
++
++    pthread_create(&hal_thread, NULL, tick_thread, NULL);
++}
++
++/*
+ void hal_init(void)
+ {
+     wayland_init();
+@@ -71,6 +85,7 @@ void hal_init(void)
+     static pthread_t hal_thread;
+     pthread_create(&hal_thread, NULL, tick_thread, NULL);
+ }
++*/
+ 
+ 
+ 
+diff --git a/src/os/linux/main.c b/src/os/linux/main.c
+index 52267c1..b79f5f9 100644
+--- a/src/os/linux/main.c
++++ b/src/os/linux/main.c
+@@ -2,20 +2,13 @@
+ // vim: ft=cpp:expandtab:ts=4:sw=4:softtabstop=4:
+ // SPDX-FileCopyrightText: Huawei Inc.
+ // SPDX-License-Identifier: MIT
+-
+-#define _DEFAULT_SOURCE /* needed for usleep() */
++#include <limits.h>
++#include <errno.h>
++#include <poll.h>
+ #include <stdio.h>
+-#include <stdlib.h>
+-#include <unistd.h>
+-
+-#include <lvgl/lvgl.h>
+ 
+-static void hal_init(void); /* see {sdl,...}.c */
++#include "lvgl/demos/lv_demos.h"
+ 
+-#include "widgets/msgbox.h"
+-#include "widgets/yesno.h"
+-#include "widgets/inputbox.h"
+-#include "widgets/checklist.h"
+ 
+ 
+ char * usage(int argc, char ** argv)
+@@ -36,50 +29,56 @@ Commands: \n\
+ }
+ 
+ 
+-void default_ui_init(int argc, char ** argv)
++
++int main(int argc, char ** argv)
+ {
+-    usage(argc, argv);
+-    char * msgbox_argv[] = {
+-        argv[0],
+-        "--msgbox",
+-        "Basic UI utility to be used in scripts.\n\
+-Inspired by ncurses dialog, implemented using LVGL\n\
+-For help run again with '--help' command option"
+-    };
+-    msgbox_ui_init(3, msgbox_argv);
+-}
++    if((argc > 1) && strcmp(argv[1], "--help") == 0) {
++        usage(argc, argv);
++        return 0;
++    }
+ 
++    struct pollfd pfd;
++    uint32_t time_till_next;
++    int sleep;
+ 
+-void ui_init(int argc, char ** argv)
+-{
+-    lv_obj_set_flex_flow(lv_scr_act(), LV_FLEX_FLOW_COLUMN);
+-    lv_obj_set_flex_align(lv_scr_act(),
+-                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+-                          LV_FLEX_ALIGN_CENTER);
+-    if((argc >= 1) && (argv[1])) {
+-        if(strcmp(argv[1], "--msgbox") == 0) {
+-            msgbox_ui_init(argc, argv);
+-        }
+-        else if(strcmp(argv[1], "--yesno") == 0) {
+-            yesno_ui_init(argc, argv);
+-        }
+-        else if(strcmp(argv[1], "--inputbox") == 0) {
+-            inputbox_ui_init(argc, argv);
+-        }
+-        else if(strcmp(argv[1], "--checklist") == 0) {
+-            checklist_ui_init(argc, argv);
++    lv_init();
++    hal_init();
++    // ui_init(argc, argv);
++    // lv_demo_benchmark();
++    lv_demo_widgets();
++
++    pfd.fd = lv_wayland_get_fd();
++    pfd.events = POLLIN;
++
++    // while(1) {
++    //     lv_timer_handler();
++    //     usleep(5 * 1000);
++    // }
++    while(1) {
++        /* Handle any Wayland/LVGL timers/events */
++        time_till_next = lv_wayland_timer_handler();
++
++        /* Run until the last window closes */
++        if (!lv_wayland_window_is_open(NULL)) {
++            break;
+         }
+-        else {
+-            default_ui_init(argc, argv);
++
++        /* Wait for something interesting to happen */
++        if (time_till_next == LV_NO_TIMER_READY) {
++            sleep = -1;
++        } else if (time_till_next > INT_MAX) {
++            sleep = INT_MAX;
++        } else {
++           sleep = time_till_next;
+         }
++
++        while ((poll(&pfd, 1, sleep) < 0) && (errno == EINTR));
+     }
+-    else {
+-        default_ui_init(argc, argv);
+-    }
++    return 0;
+ }
+ 
+ 
+-
++/*
+ int main(int argc, char ** argv)
+ {
+     if((argc > 1) && strcmp(argv[1], "--help") == 0) {
+@@ -97,3 +96,4 @@ int main(int argc, char ** argv)
+     }
+     return 0;
+ }
++*/
