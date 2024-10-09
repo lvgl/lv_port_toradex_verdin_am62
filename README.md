@@ -1,109 +1,290 @@
-# LVGL ported to Verdin AM62 on Linux BSP
+# LVGL ported to verdin am62
 
 ## Overview
 
-This guide provides steps to cross-compile an LVGL project for the Verdin AM62 from Toradex. The project is based on the [lv_drivers](https://github.com/lvgl/lv_drivers/tree/release/v8.3) and [lvgl](https://github.com/lvgl/lvgl/tree/release/v8.3) repositories and a lvgl demo from [dialog lvgl](https://gitlab.eclipse.org/pcoval/dialog-lvgl.git).
+This guide provides steps to setup the Verdin am62 and run a cross-compiled LVGL application on the target.
 
-This repository offers insstructions on how to cross-compile and run lvgl framwork and application on top of the [Weston](https://wiki.archlinux.org/title/Weston) compositor.  
+This guide is done with Verdin AM62 Dual 1GB WB IT on Yavia carrier board.
 
 ## Buy
 
-You can purchase the Verdin AM62 and compatible carrier boards directly from Toradex.'
+You can purchase the Verdin am62 from [Toradex website](https://www.toradex.com/computer-on-modules/verdin-arm-family/ti-am62#buynow).
+
+There are different Verdin AM62 available:
+
+-   Verdin AM62 Quad 2GB WB IT
+-   Verdin AM62 Dual 1GB WB IT
+-   Verdin AM62 Quad 1GB IT
+-   Verdin AM62 Quad 1GB ET
+-   Verdin AM62 Solo 512MB WB IT
+-   Verdin AM62 Solo 512MB
+
+You can find the differences between these SOMs on the Verdin AM62 Datasheet [here](https://www.toradex.com/computer-on-modules/verdin-arm-family/ti-am62) (1-5).
+
+This is a SoM (System on Module) that can be tested with a carrier board. Toradex recommends ordering one of the following carrier boards for your first-time order:
+
+-   [Dahlia Carrier Board](https://developer.toradex.com/hardware/verdin-som-family/carrier-boards/dahlia-carrier-board/)
+-   [Yavia](https://developer.toradex.com/hardware/verdin-som-family/carrier-boards/verdin-development-board/)
+-   [Verdin Development Board](https://developer.toradex.com/hardware/verdin-som-family/carrier-boards/verdin-development-board/)
+
+## Benchmark
+
+The default buffering is fbdev.
+
+**Frame buffer, 2 threads**
+
+| Name                      | Avg. CPU | Avg. FPS | Avg. time | render time | flush time |
+| ------------------------- | -------- | -------- | --------- | ----------- | ---------- |
+| Empty screen              | 71.00%   | 24       | 27        | 10          | 17         |
+| Moving wallpaper          | 86.00%   | 21       | 38        | 23          | 15         |
+| Single rectangle          | 27.00%   | 27       | 5         | 3           | 2          |
+| Multiple rectangles       | 76.00%   | 23       | 34        | 20          | 14         |
+| Multiple RGB images       | 87.00%   | 22       | 34        | 20          | 14         |
+| Multiple ARGB images      | 90.00%   | 16       | 48        | 35          | 13         |
+| Rotated ARGB images       | 95.00%   | 7        | 118       | 105         | 13         |
+| Multiple labels           | 89.00%   | 20       | 39        | 26          | 13         |
+| Screen sized text         | 7.00%    | 27       | 6         | 5           | 1          |
+| Multiple arcs             | 84.00%   | 21       | 37        | 23          | 14         |
+| Containers                | 92.00%   | 13       | 63        | 50          | 13         |
+| Containers with overlay   | 93.00%   | 9        | 86        | 73          | 13         |
+| Containers with opa       | 93.00%   | 10       | 78        | 65          | 13         |
+| Containers with opa_layer | 97.00%   | 4        | 237       | 224         | 13         |
+| Containers with scrolling | 92.00%   | 13       | 63        | 50          | 13         |
+| Widgets demo              | 36.00%   | 23       | 22        | 18          | 4          |
+| All scenes avg.           | 75.00%   | 17       | 57        | 46          | 11         |
+
+The other configurations that can be used are:
+
+-   DRM
+-   Wayland
+
+Any of these buffering strategies can be used with multiple threads to render the frames.
 
 ## Specification
 
-### CPU and Memory
-- **Module:** Vedin AM62
-- **RAM:** 1GB DDR RAM
-- **Flash:** 8GB eMMC Flash
-- **GPU:** PowerVR Rogue AXE-1-16M
+### CPU and memory
+
+-   **MCU**: Verdin AM62 ([datasheet](https://www.ti.com/lit/ds/sprsp58b/sprsp58b.pdf?ts=1727416272582&ref_url=https%253A%252F%252Fwww.google.com%252F))
+
+    -   2 64-bit Arm® Cortex®-A53 @1.4GHz
+    -   Arm® Cortex®-M4F MCU @400MHz
+
+-   **RAM:** 1GB DDR RAM
+
+    -   16-Bit data bus with inline ECC
+
+    -   Supports speeds up to 1600 MT/s
+
+-   **Flash:** 8GB eMMC Flash
+-   **GPU:** PowerVR Rogue AXE-1-16M
+
+### Carrier board - Yavia
+
+The guide was done on Yavia. You can find the datasheet of the carrier board [here](https://docs.toradex.com/111745-yavia-v1.0-datasheet.pdf).
 
 ## Getting started
 
 ### Hardware setup
-- Insert the Verdin AM62 module into one of Toradex’s carrier boards, e,g. Dahlia with DSI to HDMI adapter.
-- Connect a display to the carrier board. HDMI interface from the DSI to HDMI adapter on Dahlia can be enabled by the [device tree overlays](https://developer.toradex.cn/torizon/application-development/use-cases/multimedia/setting-up-displays-with-torizon/#HDMI).
-```
-root@verdin-am62:~# cat /boot/overlays.txt
-fdt_overlays=verdin-am62_dsi-to-hdmi_overlay.dtbo verdin-am62_spidev_overlay.dtbo
-```
+
+If it is the first time you are booting the SoM, it comes with Toradex Easy Installer by default, so you can skip the next section
+
+### (Optional) Flash Toradex Easy Installer (Tezi)
+
+As mentioned, this is required if you want to flash again the SoM to start with a clean setup, or because you want to change the OS version.
+
+The following steps come from [Tezi documentation](https://developer.toradex.com/easy-installer/toradex-easy-installer/loading-toradex-easy-installer). For this guide, we will use the USB OTG approach.
+
+-   Download Tezi [here](https://developer.toradex.com/easy-installer/toradex-easy-installer/download-tezi/). Download the lastest release, version 6 for Verdin AM62.
+
+-   Then put the SoM in recovery mode:
+
+    -   Plug a USB Type-C to Type-A cable into the DRP connector (J7)
+    -   Connect the USB cable to your PC (host)
+    -   Press and hold the Recovery button (B3) while plugging the power supply cable into the J1 connector. You can also press the recovery button and press the reset button next to it.
+    -   Keep the B3 button pressed for 6 seconds and release it.
+
+    If something goes wrong, there is a video showing how to enter the board in recovery mode in [Tezi documentation](https://developer.toradex.com/easy-installer/toradex-easy-installer/loading-toradex-easy-installer) (section "Put your SoM in recovery mode").
+
+-   Load Tezi through the USB OTG interface. To do so, go to the directory you downloaded Tezi and unzip it. Then to load Tezi:
+
+    ```bash
+    cd <unzipped_directory>
+    ./recovery-linux.sh
+    ```
+
+-   Then wait for Tezi installer to display the flash options on the screen.
+
+### Flash a new image with Tezi
+
+In this guide, we will use the default `Toradex Embedded Linux Reference Multimedia Image`.
+
+You need a mouse plugged in the USB port to select and flash the image. Wait for the installation to be completed!
+
+If you want to create your own system and flash it, [here](https://developer.toradex.com/easy-installer/toradex-easy-installer/flashing-new-image-using-tezi/) is a detailed guide to use Tezi.
 
 ### Software setup
-- Ensure the Verdin AM62 module is running [reference multimedia image](https://developer.toradex.com/software/toradex-embedded-software/toradex-download-links-torizon-linux-bsp-wince-and-partner-demos/#TdxRef6QuarterlyMult). The default autostart demo can be stoped by `systemctl stop wayland-app-launch.service`. The image comes with a default root user with empty password.
-- On the Linux host, install [Linux SDK](https://developer.toradex.com/linux-bsp/os-development/build-yocto/linux-sdks/) for Verdin AM62. For example, the Linux SDK is installed at `~/SDK`. Source the environment script in every shell session.
-```
-$ . environment-setup-aarch64-tdx-linux 
-```
 
-### Build the binary on the host
-- Clone this repository repository:
+This guide was tested on Ubuntu 22.04 host.
 
-```
-git clone --recursive https://github.com/lvgl/lv_port_toradex_verdin_am62.git
-```
+#### Install docker
 
-- apply patchs
-```
-cd lvgl
-patch -p 1 < ../lvgl.patch
+-   Follow this [tutorial](/https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-22-04) to install and setup docker on your system.
 
-cd lv_drivers
-patch -p 1 < ../lv_drivers.patch
+-   Support to run arm64 docker containers on the host:
 
-cd dialog-lvgl
-patch -p 1 < ../dialog.patch
+    ```bash
+    sudo apt-get install qemu-user-static
+    docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+    ```
+
+#### Install utilities
+
+```bash
+sudo apt install picocom nmap
 ```
 
-lv_drivers.patch contains an absolute path of Linux SDK that needs to be changed to your own.
-```
-include_directories(~/SDK/sysroots/aarch64-tdx-linux/usr/src/debug/weston/10.0.2-r0/build)
-```
+### Run the default project
 
-- build lvgl and lv_drivers
+Clone the repository:
 
-header files and built libraries are installed to a `lvgl_wayland` folder which will be copied to Linux SDK intallation path later for application compile.
-```
-cd lvgl
-mkdir build
-cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=../../lvgl_wayland
-make
-make install
-
-
-cd lv_driver
-mkdir build
-cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=../../lvgl_wayland
-make
-make install
+```bash
+git clone --recurse-submodules https://github.com/lvgl/lv_port_toradex_verdin_am62.git
 ```
 
-- copy files to Linux SDK intallation path
-Linux SDK was installed at `~/SDK` and it has to been changed to your own path.
-```
-cd ../../lvgl_wayland
-cp -r ./* ~/SDK/sysroots/aarch64-tdx-linux/usr/
-```
+Build the docker image and the lvgl benchmark application:
 
-- build application
-
-```
-cd dialog-lvgl
-make lvgl_driver=wayland
-```
-The binar `dialog-lvgl` will be generated.
-
-
-
-### Run the binary on the module
-
-copy `dialog-lvgl` to Verdin AM62, set library path and excute the bianry.
-```
-export LD_LIBRARY_PATH=/usr/lib/plugins/wayland-shell-integration
-./dialog-lvgl
+```bash
+cd lv_port_toradex_verdin_am62
+./scripts/docker_setup.sh --create-image
+./scripts/docker_setup.sh --build-app
 ```
 
+Run the executable on the target:
+
+-   Get the IP of the target board:
+
+    -   <u>Option 1</u>: from the UART, on the board:
+
+        ```bash
+        sudo picocom -b 115200 /dev/ttyUSB0
+        ## Then inside the console, log as "root", no password required
+        ## Then retrieve the ip of the board
+        ip a
+        ```
+
+    -   <u>Option 2</u>: Get the IP from your host with nmap
+
+        ```bash
+        ## Find the IP of the board. You need to know your ip (ifconfig or ip a)
+        ## HOST_IP should be built like this :
+        ## If the ip is 192.168.1.86, in the following command HOST_IP = 192.168.1.0/24
+        nmap -sn <HOST_IP>/24 | grep verdin-am62
+        ```
+
+-   Then transfer the executable on the board:
+
+    ```bash
+    scp lvgl_port_linux/bin/lvgl-app root@<BOARD_IP>:/root
+    ```
+
+-   Start the application
+
+    ```bash
+    ssh root@<BOARD_IP>
+
+    systemctl stop wayland-app-launch.service
+    ######################################
+    ## WARNING: do not stop these services if using wayland demo
+    systemctl stop weston.socket
+    systemctl stop weston.service
+    ######################################
+
+    ./lvgl-app
+    ```
+
+### Change configuration
+
+Some configurations are provided in the folder `lvgl_conf_example` .
+
+The default configuration used is lv_conf_fb_4_threads.h. To change the configuration, modify the `lvgl_port_linux/lv_conf.h` file with the desired configuration.
+
+Also modify the `lvgl_port_linux/CMakelists.txt` file option:
+
+-   LV_USE_WAYLAND
+-   LV_USE_SDL
+-   LV_USE_DRM
+
+Default is for fbdev backend. Only set 1 of these options to "ON" and ensure it's coherent with `lv_conf.h`. This can also be changed from the script `scripts/build_app.sh`.
+
+### Start with your own application
+
+The folder `lvgl_port_linux` is an example of an application using LVGL.
+
+LVGL is integrated as a submodule in the folder. To change the version of the library:
+
+```bash
+cd lvgl_port_linux
+git checkout <branch_name_or_commit_hash>
+```
+
+The file `main.c` is the default application provided and is configured to run the benchmark demo provided by LVGL library.
+
+The main steps to create your own application are:
+
+-   Modify `main.c`
+-   Add any folders and files to extend the functionalities
+-   Update `Dockerfile` to add any package
+-   Modify `CMakeLists.txt` provided file to ensure all the required files are compiled and linked
+-   Use the docker scripts provided to build the application for ARM64 architecture.
+
+## TroubleShooting
+
+### Output folder permissions
+
+If there is any problem with the output folder generated permissions, modify the permissions:
+
+```bash
+sudo chown -R $(whoami):$(whoami) lvgl_port_linux/bin
+```
+
+### Fbdev example runtime error
+
+This error can be printed when running the application:
+
+```bash
+[Warn]	(1382.767, +37)	 lv_display_refr_timer: No draw buffer lv_refr.c:374
+[Warn]	(1382.804, +37)	 lv_display_refr_timer: No draw buffer lv_refr.c:374
+[Warn]	(1382.841, +37)	 lv_display_refr_timer: No draw buffer lv_refr.c:374
+[Warn]	(1382.878, +37)	 lv_display_refr_timer: No draw buffer lv_refr.c:374
+```
+
+To fix the issue find the existing fbdev available:
+
+```bash
+ls /dev/fb*
+```
+
+Export the variable to match the fbdev name:
+
+```bash
+export LV_LINUX_FBDEV_DEVICE=/dev/fb0
+```
+
+### Wayland example runtime error
+
+While running the application, if there is an error about `XDG_RUNTIME_DIR`, add the following environment variable on the board.
+
+```bash
+export XDG_RUNTIME_DIR=/run/user/1000
+```
+
+### Changing configuration causes errors building the application
+
+CMake may have troubles with CMakeLists.txt changes with some variables setup. If there is any problem building, try to clean the build folder:
+
+```bash
+rm -rf lv_port_linux/build-arm64
+```
 
 ## Contribution and Support
 
