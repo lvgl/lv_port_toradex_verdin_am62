@@ -61,6 +61,12 @@ The other configurations that can be used are:
 
 Any of these buffering strategies can be used with multiple threads to render the frames.
 
+Check out Verdin am62 in action, running LVGL's benchmark demo:
+
+<a href="https://www.youtube.com/watch?v=v9eT6nWwy5Y">
+    <img src="https://github.com/user-attachments/assets/1c46569d-a7f7-4755-adff-3ac505d15911" width="50%" alt="image">
+</a>
+
 ## Specification
 
 ### CPU and memory
