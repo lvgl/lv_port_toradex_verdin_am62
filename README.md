@@ -57,6 +57,7 @@ The other configurations that can be used are:
 
 -   DRM
 -   Wayland
+-   SDL
 
 Any of these buffering strategies can be used with multiple threads to render the frames.
 
@@ -151,6 +152,23 @@ Clone the repository:
 git clone --recurse-submodules https://github.com/lvgl/lv_port_toradex_verdin_am62.git
 ```
 
+**IMPORTANT**: 
+
+- default application from lv_port_linux runs the widget demo. To run the benchmark demo, modify `lv_port_linux/main.c` : 
+
+  ```c
+  /*Create a Demo*/
+  // lv_demo_widgets();
+  // lv_demo_widgets_start_slideshow();
+  lv_demo_benchmark();
+  ```
+
+- The default lv_conf.h might not be the best configuration for the board. Feel free to replace the default lv_conf.h with one of the provided configurations in `lv_conf_example` folder.
+
+  ```bash
+  cp lv_conf_example/lv_conf_fb_2_threads.h lv_port_linux/lv_conf.h
+  ```
+
 Build the docker image and the lvgl benchmark application:
 
 ```bash
@@ -184,46 +202,38 @@ Run the executable on the target:
 -   Then transfer the executable on the board:
 
     ```bash
-    scp lvgl_port_linux/bin/lvgl-app root@<BOARD_IP>:/root
+    scp lv_port_linux/bin/lvglsim root@<BOARD_IP>:/root
     ```
 
 -   Start the application
 
     ```bash
     ssh root@<BOARD_IP>
-
+    
     systemctl stop wayland-app-launch.service
     ######################################
     ## WARNING: do not stop these services if using wayland demo
     systemctl stop weston.socket
     systemctl stop weston.service
     ######################################
-
-    ./lvgl-app
+    
+    ./lvglsim
     ```
 
 ### Change configuration
 
-Some configurations are provided in the folder `lvgl_conf_example` .
+Some configurations are provided in the folder `lv_conf_example` .
 
-The default configuration used is lv_conf_fb_4_threads.h. To change the configuration, modify the `lvgl_port_linux/lv_conf.h` file with the desired configuration.
-
-Also modify the `lvgl_port_linux/CMakelists.txt` file option:
-
--   LV_USE_WAYLAND
--   LV_USE_SDL
--   LV_USE_DRM
-
-Default is for fbdev backend. Only set 1 of these options to "ON" and ensure it's coherent with `lv_conf.h`. This can also be changed from the script `scripts/build_app.sh`.
+The default configuration used is lv_conf_fb_4_threads.h. To change the configuration, modify the `lv_port_linux/lv_conf.h` file with the desired configuration.
 
 ### Start with your own application
 
-The folder `lvgl_port_linux` is an example of an application using LVGL.
+The folder `lv_port_linux` is an example of an application using LVGL.
 
 LVGL is integrated as a submodule in the folder. To change the version of the library:
 
 ```bash
-cd lvgl_port_linux
+cd lv_port_linux
 git checkout <branch_name_or_commit_hash>
 ```
 
@@ -244,7 +254,7 @@ The main steps to create your own application are:
 If there is any problem with the output folder generated permissions, modify the permissions:
 
 ```bash
-sudo chown -R $(whoami):$(whoami) lvgl_port_linux/bin
+sudo chown -R $(whoami):$(whoami) lv_port_linux/bin
 ```
 
 ### Fbdev example runtime error
