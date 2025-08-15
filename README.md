@@ -1,3 +1,5 @@
+**:rocket: This repository is available in the [LVGL Project Creator](https://lvgl.io/tools/project-creator), making it easy to create and customize a new project in just a few clicks.**
+
 # LVGL ported to verdin am62
 
 ## Overview
